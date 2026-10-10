@@ -45,7 +45,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         Configuration.getInstance().userAgentValue = packageName
 
         mapView = MapView(this).apply {
@@ -105,38 +104,40 @@ class MainActivity : ComponentActivity() {
             mapView.overlays.clear()
 
             if (routePoints.size >= 2) {
-                val line = Polyline().apply {
-                    setPoints(routePoints)
-                    title = "Optimized driving route"
-                    width = 9f
-                }
-                mapView.overlays.add(line)
+                mapView.overlays.add(
+                    Polyline().apply {
+                        setPoints(routePoints)
+                        title = "Routiva optimized route"
+                        width = 9f
+                    }
+                )
             }
 
             places.forEachIndexed { index, place ->
-                val marker = Marker(mapView).apply {
-                    position = GeoPoint(place.latitude, place.longitude)
-                    title = "${index + 1}. ${place.name}"
-                    snippet = if (completed.getOrNull(index) == true) {
-                        "Delivered"
-                    } else {
-                        "Delivery stop"
+                mapView.overlays.add(
+                    Marker(mapView).apply {
+                        position = GeoPoint(place.latitude, place.longitude)
+                        title = "${index + 1}. ${place.name}"
+                        snippet = if (completed.getOrNull(index) == true) {
+                            "Delivered"
+                        } else {
+                            "Delivery stop"
+                        }
                     }
-                }
-                mapView.overlays.add(marker)
+                )
             }
 
-            val pointsToFit = if (routePoints.isNotEmpty()) {
+            val points = if (routePoints.isNotEmpty()) {
                 routePoints
             } else {
                 places.map { GeoPoint(it.latitude, it.longitude) }
             }
 
-            if (pointsToFit.isNotEmpty()) {
-                val north = pointsToFit.maxOf { it.latitude }
-                val south = pointsToFit.minOf { it.latitude }
-                val east = pointsToFit.maxOf { it.longitude }
-                val west = pointsToFit.minOf { it.longitude }
+            if (points.isNotEmpty()) {
+                val north = points.maxOf { it.latitude }
+                val south = points.minOf { it.latitude }
+                val east = points.maxOf { it.longitude }
+                val west = points.minOf { it.longitude }
 
                 mapView.post {
                     mapView.zoomToBoundingBox(
@@ -203,16 +204,13 @@ class MainActivity : ComponentActivity() {
                     val place = selectedPlace
 
                     when {
-                        place == null -> {
+                        place == null ->
                             message = "Choose an address from suggestions"
-                        }
 
                         places.any {
                             it.latitude == place.latitude &&
                             it.longitude == place.longitude
-                        } -> {
-                            message = "Address already added"
-                        }
+                        } -> message = "Address already added"
 
                         else -> {
                             places.add(place)
@@ -242,7 +240,7 @@ class MainActivity : ComponentActivity() {
                             message = "Add at least 2 addresses"
                         } else {
                             busy = true
-                            message = "Optimizing stop order..."
+                            message = "Calculating driving times..."
                         }
                     },
                     enabled = !busy,
@@ -292,7 +290,6 @@ class MainActivity : ComponentActivity() {
             }
 
             Text(message, style = MaterialTheme.typography.bodyMedium)
-
             Spacer(Modifier.height(8.dp))
 
             Text(
@@ -413,105 +410,159 @@ class MainActivity : ComponentActivity() {
     private suspend fun createRoute(
         input: List<Place>
     ): RouteResult = withContext(Dispatchers.IO) {
-        require(input.size >= 2) {
-            "Add at least 2 addresses"
-        }
+
+        require(input.size >= 2) { "Add at least 2 addresses" }
 
         val coordinates = input.joinToString(";") {
             "${it.longitude},${it.latitude}"
         }
 
-        // Try optimizing the start, end, and intermediate stops.
-        try {
-            val tripUrl = URL(
-                "https://router.project-osrm.org/trip/v1/driving/" +
-                "$coordinates?source=any&destination=any" +
-                "&roundtrip=false&overview=full&geometries=geojson"
-            )
-
-            val json = requestJson(tripUrl, 20000)
-
-            if (json.optString("code") != "Ok") {
-                throw IllegalStateException(
-                    json.optString("message", "Trip service failed")
-                )
-            }
-
-            val trips = json.optJSONArray("trips")
-                ?: throw IllegalStateException("No trip returned")
-
-            if (trips.length() == 0) {
-                throw IllegalStateException("No trip found")
-            }
-
-            val trip = trips.getJSONObject(0)
-            val waypoints = json.getJSONArray("waypoints")
-
-            val ordered = input.mapIndexed { index, place ->
-                waypoints.getJSONObject(index)
-                    .optInt("waypoint_index", index) to place
-            }
-                .sortedBy { it.first }
-                .map { it.second }
-
-            val points = parseGeometry(trip)
-
-            if (points.size < 2) {
-                throw IllegalStateException("Empty route geometry")
-            }
-
-            return@withContext RouteResult(
-                ordered,
-                points,
-                "Optimized route created"
-            )
-        } catch (_: Exception) {
-            // If Trip optimization is unavailable, try normal routing.
-        }
-
-        // Fallback: a road route through addresses in entered order.
-        val routeUrl = URL(
-            "https://router.project-osrm.org/route/v1/driving/" +
-            "$coordinates?overview=full&geometries=geojson"
+        // Get driving-time matrix for every pair of stops.
+        val tableUrl = URL(
+            "https://router.project-osrm.org/table/v1/driving/" +
+            "$coordinates?annotations=duration"
         )
 
-        val json = requestJson(routeUrl, 20000)
+        val tableJson = requestJson(tableUrl, 25000)
 
-        if (json.optString("code") != "Ok") {
+        if (tableJson.optString("code") != "Ok") {
             throw IllegalStateException(
-                json.optString("message", "Road route failed")
+                tableJson.optString("message", "Driving-time matrix failed")
             )
         }
 
-        val routes = json.optJSONArray("routes")
+        val durationArray = tableJson.getJSONArray("durations")
+        val n = input.size
+
+        val durations = Array(n) { i ->
+            DoubleArray(n) { j ->
+                val row = durationArray.getJSONArray(i)
+                if (row.isNull(j)) {
+                    Double.POSITIVE_INFINITY
+                } else {
+                    row.getDouble(j)
+                }
+            }
+        }
+
+        // Try every possible starting stop, using nearest-neighbour.
+        var bestOrder: List<Int>? = null
+        var bestCost = Double.POSITIVE_INFINITY
+
+        for (start in 0 until n) {
+            val remaining = (0 until n).toMutableSet()
+            val order = mutableListOf(start)
+            remaining.remove(start)
+            var current = start
+            var cost = 0.0
+
+            while (remaining.isNotEmpty()) {
+                val next = remaining
+                    .filter { durations[current][it].isFinite() }
+                    .minByOrNull { durations[current][it] }
+                    ?: break
+
+                cost += durations[current][next]
+                order.add(next)
+                remaining.remove(next)
+                current = next
+            }
+
+            if (order.size != n) continue
+
+            // Improve the open route using 2-opt reversals.
+            var improved = true
+            while (improved) {
+                improved = false
+
+                for (i in 0 until order.size - 1) {
+                    for (j in i + 1 until order.size) {
+                        val candidate = order.toMutableList()
+                        candidate.subList(i, j + 1).reverse()
+
+                        val candidateCost = routeCost(candidate, durations)
+
+                        if (candidateCost + 0.001 < routeCost(order, durations)) {
+                            order.clear()
+                            order.addAll(candidate)
+                            improved = true
+                        }
+                    }
+                }
+            }
+
+            cost = routeCost(order, durations)
+
+            if (cost < bestCost) {
+                bestCost = cost
+                bestOrder = order.toList()
+            }
+        }
+
+        val order = bestOrder
+            ?: throw IllegalStateException(
+                "Some addresses are not connected by road"
+            )
+
+        val orderedPlaces = order.map { input[it] }
+        val orderedCoordinates = orderedPlaces.joinToString(";") {
+            "${it.longitude},${it.latitude}"
+        }
+
+        // Draw the actual road route in optimized stop order.
+        val routeUrl = URL(
+            "https://router.project-osrm.org/route/v1/driving/" +
+            "$orderedCoordinates?overview=full&geometries=geojson"
+        )
+
+        val routeJson = requestJson(routeUrl, 25000)
+
+        if (routeJson.optString("code") != "Ok") {
+            throw IllegalStateException(
+                routeJson.optString("message", "Road route failed")
+            )
+        }
+
+        val routes = routeJson.optJSONArray("routes")
             ?: throw IllegalStateException("No route returned")
 
         if (routes.length() == 0) {
             throw IllegalStateException("No road route found")
         }
 
-        val points = parseGeometry(routes.getJSONObject(0))
-
-        if (points.size < 2) {
-            throw IllegalStateException("Empty route geometry")
-        }
-
-        RouteResult(
-            input,
-            points,
-            "Route created in entered order (optimization unavailable)"
-        )
-    }
-
-    private fun parseGeometry(route: JSONObject): List<GeoPoint> {
-        val coords = route
+        val geometry = routes.getJSONObject(0)
             .getJSONObject("geometry")
             .getJSONArray("coordinates")
 
-        return (0 until coords.length()).map { i ->
-            val point = coords.getJSONArray(i)
+        val points = (0 until geometry.length()).map { i ->
+            val point = geometry.getJSONArray(i)
             GeoPoint(point.getDouble(1), point.getDouble(0))
         }
+
+        if (points.size < 2) {
+            throw IllegalStateException("Route geometry is empty")
+        }
+
+        RouteResult(
+            orderedPlaces = orderedPlaces,
+            points = points,
+            message = "Route optimized by estimated driving time"
+        )
+    }
+
+    private fun routeCost(
+        order: List<Int>,
+        durations: Array<DoubleArray>
+    ): Double {
+        var total = 0.0
+
+        for (i in 0 until order.size - 1) {
+            val duration = durations[order[i]][order[i + 1]]
+            if (!duration.isFinite()) return Double.POSITIVE_INFINITY
+            total += duration
+        }
+
+        return total
     }
 
     private fun requestJson(
