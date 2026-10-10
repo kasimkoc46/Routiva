@@ -70,14 +70,18 @@ class MainActivity : ComponentActivity() {
         var query by remember { mutableStateOf("") }
         var suggestions by remember { mutableStateOf(listOf<Place>()) }
         var selectedPlace by remember { mutableStateOf<Place?>(null) }
+
         val places = remember { mutableStateListOf<Place>() }
         val completed = remember { mutableStateListOf<Boolean>() }
+
         var routePoints by remember {
             mutableStateOf<List<GeoPoint>>(emptyList())
         }
+
         var message by remember {
             mutableStateOf("Enter a delivery address")
         }
+
         var busy by remember { mutableStateOf(false) }
 
         LaunchedEffect(query) {
@@ -86,31 +90,42 @@ class MainActivity : ComponentActivity() {
 
             if (query.trim().length >= 3) {
                 delay(450)
+
                 try {
                     suggestions = searchPlaces(query.trim())
+
                     if (suggestions.isEmpty()) {
                         message = "No addresses found"
                     }
-                } catch (_: Exception) {
-                    message = "Address search failed. Check internet."
+                } catch (e: Exception) {
+                    message = "Address search failed: ${e.message}"
+                        .take(180)
                 }
             }
         }
 
-        LaunchedEffect(places.size, completed.toList(), routePoints) {
+        LaunchedEffect(
+            places.toList(),
+            completed.toList(),
+            routePoints
+        ) {
             mapView.overlays.clear()
 
             if (routePoints.isNotEmpty()) {
                 val line = Polyline().apply {
                     setPoints(routePoints)
                     title = "Routiva route"
+                    width = 9f
                 }
                 mapView.overlays.add(line)
             }
 
             places.forEachIndexed { index, place ->
                 val marker = Marker(mapView).apply {
-                    position = GeoPoint(place.latitude, place.longitude)
+                    position = GeoPoint(
+                        place.latitude,
+                        place.longitude
+                    )
                     title = "${index + 1}. ${place.name}"
                     snippet = if (completed.getOrNull(index) == true) {
                         "Delivered"
@@ -118,17 +133,36 @@ class MainActivity : ComponentActivity() {
                         "Delivery stop"
                     }
                 }
+
                 mapView.overlays.add(marker)
             }
 
-            if (places.isNotEmpty()) {
+            if (routePoints.isNotEmpty()) {
+                val points = routePoints
+                val north = points.maxOf { it.latitude }
+                val south = points.minOf { it.latitude }
+                val east = points.maxOf { it.longitude }
+                val west = points.minOf { it.longitude }
+
+                mapView.post {
+                    mapView.zoomToBoundingBox(
+                        org.osmdroid.util.BoundingBox(
+                            north, east, south, west
+                        ),
+                        true,
+                        50
+                    )
+                    mapView.invalidate()
+                }
+            } else if (places.isNotEmpty()) {
                 val last = places.last()
                 mapView.controller.animateTo(
                     GeoPoint(last.latitude, last.longitude)
                 )
+                mapView.invalidate()
+            } else {
+                mapView.invalidate()
             }
-
-            mapView.invalidate()
         }
 
         Column(
@@ -137,7 +171,7 @@ class MainActivity : ComponentActivity() {
                 .padding(16.dp)
         ) {
             Text(
-                "Routiva",
+                text = "Routiva",
                 style = MaterialTheme.typography.headlineLarge
             )
 
@@ -157,7 +191,7 @@ class MainActivity : ComponentActivity() {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 170.dp)
+                        .heightIn(max = 180.dp)
                 ) {
                     LazyColumn {
                         itemsIndexed(suggestions) { _, place ->
@@ -182,28 +216,32 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     val place = selectedPlace
-                    if (place != null &&
-                        places.none {
+
+                    if (place == null) {
+                        message = "Choose an address from suggestions"
+                    } else if (
+                        places.any {
                             it.latitude == place.latitude &&
                             it.longitude == place.longitude
                         }
                     ) {
+                        message = "Address already added"
+                    } else {
                         places.add(place)
                         completed.add(false)
                         query = ""
                         selectedPlace = null
                         suggestions = emptyList()
+                        routePoints = emptyList()
                         message = "Address added"
-                    } else if (place == null) {
-                        message = "Select an address from suggestions first"
-                    } else {
-                        message = "Address already added"
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Add address")
             }
+
+            Spacer(Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -218,10 +256,10 @@ class MainActivity : ComponentActivity() {
                             message = "Creating route..."
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    enabled = !busy
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text("Create route")
+                    Text(if (busy) "Please wait..." else "Create route")
                 }
 
                 OutlinedButton(
@@ -231,6 +269,7 @@ class MainActivity : ComponentActivity() {
                         routePoints = emptyList()
                         message = "Addresses cleared"
                     },
+                    enabled = !busy,
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("Clear all")
@@ -241,26 +280,37 @@ class MainActivity : ComponentActivity() {
                 if (busy) {
                     try {
                         val result = createRoute(places.toList())
+
                         places.clear()
-                        places.addAll(result.first)
+                        places.addAll(result.orderedPlaces)
+
                         completed.clear()
                         completed.addAll(
-                            result.first.map { false }
+                            result.orderedPlaces.map { false }
                         )
-                        routePoints = result.second
-                        message = "Route created"
-                    } catch (_: Exception) {
-                        message = "Route failed. Try again later."
+
+                        routePoints = result.points
+                        message = result.message
+                    } catch (e: Exception) {
+                        message = (
+                            "Route error: " +
+                            (e.message ?: e.javaClass.simpleName)
+                        ).take(220)
                     } finally {
                         busy = false
                     }
                 }
             }
 
-            Text(message, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(Modifier.height(8.dp))
 
             Text(
-                "Delivery addresses (${places.size})",
+                text = "Delivery addresses (${places.size})",
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -289,7 +339,13 @@ class MainActivity : ComponentActivity() {
                             Button(
                                 onClick = {
                                     completed[index] = true
-                                    message = "Delivery completed"
+                                    message = if (
+                                        completed.all { it }
+                                    ) {
+                                        "All deliveries completed"
+                                    } else {
+                                        "Delivery completed. Continue to next stop."
+                                    }
                                 },
                                 enabled = completed.getOrNull(index) == false
                             ) {
@@ -321,127 +377,218 @@ class MainActivity : ComponentActivity() {
                 factory = { mapView },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(260.dp)
             )
         }
     }
 
-    private suspend fun searchPlaces(text: String): List<Place> =
-        withContext(Dispatchers.IO) {
-            val encoded = URLEncoder.encode(text, "UTF-8")
-            val url = URL(
-                "https://photon.komoot.io/api/?q=$encoded&limit=5&lat=52.52&lon=13.405"
+    private suspend fun searchPlaces(
+        text: String
+    ): List<Place> = withContext(Dispatchers.IO) {
+
+        val encoded = URLEncoder.encode(text, "UTF-8")
+
+        val url = URL(
+            "https://photon.komoot.io/api/" +
+            "?q=$encoded&limit=6&lat=52.52&lon=13.405"
+        )
+
+        val json = requestJson(url, 12000)
+        val features = json.getJSONArray("features")
+        val results = mutableListOf<Place>()
+
+        for (i in 0 until features.length()) {
+            val feature = features.getJSONObject(i)
+            val coordinates = feature
+                .getJSONObject("geometry")
+                .getJSONArray("coordinates")
+            val properties = feature.getJSONObject("properties")
+
+            val name = listOf(
+                properties.optString("name"),
+                properties.optString("housenumber"),
+                properties.optString("street"),
+                properties.optString("postcode"),
+                properties.optString("city")
             )
-
-            val connection =
-                url.openConnection() as HttpURLConnection
-
-            try {
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-                connection.setRequestProperty(
-                    "User-Agent",
-                    "RoutivaAndroid/1.0"
-                )
-
-                val body = connection.inputStream
-                    .bufferedReader()
-                    .use { it.readText() }
-
-                val features = JSONObject(body).getJSONArray("features")
-                val results = mutableListOf<Place>()
-
-                for (i in 0 until features.length()) {
-                    val feature = features.getJSONObject(i)
-                    val coordinates = feature
-                        .getJSONObject("geometry")
-                        .getJSONArray("coordinates")
-                    val properties = feature.getJSONObject("properties")
-
-                    val name = listOf(
-                        properties.optString("name"),
-                        properties.optString("housenumber"),
-                        properties.optString("street"),
-                        properties.optString("postcode"),
-                        properties.optString("city")
-                    )
-                        .filter {
-                            it.isNotBlank() &&
-                            it != "null"
-                        }
-                        .distinct()
-                        .joinToString(" ")
-
-                    if (name.isNotBlank()) {
-                        results.add(
-                            Place(
-                                name = name,
-                                longitude = coordinates.getDouble(0),
-                                latitude = coordinates.getDouble(1)
-                            )
-                        )
-                    }
+                .filter {
+                    it.isNotBlank() && it != "null"
                 }
+                .distinct()
+                .joinToString(" ")
 
-                results
-            } finally {
-                connection.disconnect()
+            if (name.isNotBlank()) {
+                results.add(
+                    Place(
+                        name = name,
+                        longitude = coordinates.getDouble(0),
+                        latitude = coordinates.getDouble(1)
+                    )
+                )
             }
         }
 
+        results
+    }
+
+    private data class RouteResult(
+        val orderedPlaces: List<Place>,
+        val points: List<GeoPoint>,
+        val message: String
+    )
+
     private suspend fun createRoute(
         input: List<Place>
-    ): Pair<List<Place>, List<GeoPoint>> =
-        withContext(Dispatchers.IO) {
-            val coordinates = input.joinToString(";") {
-                "${it.longitude},${it.latitude}"
-            }
+    ): RouteResult = withContext(Dispatchers.IO) {
 
-            val url = URL(
+        require(input.size >= 2) {
+            "Add at least 2 addresses"
+        }
+
+        val coordinates = input.joinToString(";") {
+            "${it.longitude},${it.latitude}"
+        }
+
+        // First try to optimize the stop order with OSRM Trip.
+        try {
+            val tripUrl = URL(
                 "https://router.project-osrm.org/trip/v1/driving/" +
                 "$coordinates?source=first&destination=last" +
                 "&roundtrip=false&overview=full&geometries=geojson"
             )
 
-            val connection =
-                url.openConnection() as HttpURLConnection
+            val json = requestJson(tripUrl, 20000)
 
-            try {
-                connection.connectTimeout = 15000
-                connection.readTimeout = 20000
-
-                val body = connection.inputStream
-                    .bufferedReader()
-                    .use { it.readText() }
-
-                val json = JSONObject(body)
-
-                if (json.optString("code") != "Ok") {
-                    throw IllegalStateException("OSRM route error")
-                }
-
-                val trip = json.getJSONArray("trips").getJSONObject(0)
-                val waypoints = json.getJSONArray("waypoints")
-                val ordered = input.mapIndexed { index, place ->
-                    val waypoint = waypoints.getJSONObject(index)
-                    waypoint.optInt("waypoint_index", index) to place
-                }.sortedBy { it.first }.map { it.second }
-
-                val coordinatesArray = trip
-                    .getJSONObject("geometry")
-                    .getJSONArray("coordinates")
-
-                val line = (0 until coordinatesArray.length()).map { i ->
-                    val point = coordinatesArray.getJSONArray(i)
-                    GeoPoint(
-                        point.getDouble(1),
-                        point.getDouble(0)
-                    )
-                }
-
-                ordered to line
-            } finally {
-                connection.disconnect()
+            if (json.optString("code") != "Ok") {
+                throw IllegalStateException(
+                    json.optString("message", "Trip service error")
+                )
             }
+
+            val trips = json.optJSONArray("trips")
+                ?: throw IllegalStateException("No trip returned")
+
+            if (trips.length() == 0) {
+                throw IllegalStateException("No trip found")
+            }
+
+            val trip = trips.getJSONObject(0)
+            val waypoints = json.getJSONArray("waypoints")
+
+            val ordered = input.mapIndexed { index, place ->
+                val waypoint = waypoints.getJSONObject(index)
+                waypoint.optInt("waypoint_index", index) to place
+            }.sortedBy { it.first }.map { it.second }
+
+            val points = parseGeometry(trip)
+
+            if (points.size < 2) {
+                throw IllegalStateException("Route geometry is empty")
+            }
+
+            return@withContext RouteResult(
+                ordered,
+                points,
+                "Optimized route created"
+            )
+        } catch (e: Exception) {
+            // If optimization fails, try a route through addresses
+            // in the order they were entered.
         }
+
+        // Fallback: route through all addresses in their current order.
+        val routeUrl = URL(
+            "https://router.project-osrm.org/route/v1/driving/" +
+            "$coordinates?overview=full&geometries=geojson"
+        )
+
+        val routeJson = requestJson(routeUrl, 20000)
+
+        if (routeJson.optString("code") != "Ok") {
+            throw IllegalStateException(
+                routeJson.optString(
+                    "message",
+                    "OSRM could not calculate this route"
+                )
+            )
+        }
+
+        val routes = routeJson.optJSONArray("routes")
+            ?: throw IllegalStateException("No route returned")
+
+        if (routes.length() == 0) {
+            throw IllegalStateException("No road route found")
+        }
+
+        val points = parseGeometry(routes.getJSONObject(0))
+
+        if (points.size < 2) {
+            throw IllegalStateException("Route geometry is empty")
+        }
+
+        RouteResult(
+            input,
+            points,
+            "Route created in address order"
+        )
+    }
+
+    private fun parseGeometry(
+        route: JSONObject
+    ): List<GeoPoint> {
+        val coordinates = route
+            .getJSONObject("geometry")
+            .getJSONArray("coordinates")
+
+        return (0 until coordinates.length()).map { i ->
+            val point = coordinates.getJSONArray(i)
+            GeoPoint(
+                point.getDouble(1),
+                point.getDouble(0)
+            )
+        }
+    }
+
+    private fun requestJson(
+        url: URL,
+        timeout: Int
+    ): JSONObject {
+        val connection = url.openConnection() as HttpURLConnection
+
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = timeout
+            connection.readTimeout = timeout
+            connection.setRequestProperty(
+                "User-Agent",
+                "RoutivaAndroid/1.0"
+            )
+            connection.setRequestProperty(
+                "Accept",
+                "application/json"
+            )
+
+            val status = connection.responseCode
+
+            val stream = if (status in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val body = stream?.bufferedReader()?.use {
+                it.readText()
+            }.orEmpty()
+
+            if (status !in 200..299) {
+                throw IllegalStateException(
+                    "Server HTTP $status: ${body.take(120)}"
+                )
+            }
+
+            return JSONObject(body)
+        } finally {
+            connection.disconnect()
+        }
+    }
 }
