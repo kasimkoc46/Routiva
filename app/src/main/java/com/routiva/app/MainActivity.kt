@@ -1,4 +1,3 @@
-
 package com.routiva.app
 
 import android.Manifest
@@ -176,16 +175,19 @@ private fun RoutivaScreen(mapView: MapView) {
             distanceKm = 0.0
             message = "Address added."
         }
+
         query = ""
         suggestions = emptyList()
     }
 
     fun removePlace(index: Int) {
         if (index !in places.indices) return
+
         places.removeAt(index)
         delivered.removeAt(index)
         serviceMinutes.removeAt(index)
         deliveryTimes.removeAt(index)
+
         routePoints = emptyList()
         routeReady = false
         routeStarted = false
@@ -230,14 +232,15 @@ private fun RoutivaScreen(mapView: MapView) {
                 )
             }
         }
+
         mapView.invalidate()
     }
 
     fun goToActiveStop() {
         if (activeIndex in places.indices) {
-            val p = places[activeIndex]
+            val place = places[activeIndex]
             mapView.controller.animateTo(
-                GeoPoint(p.latitude, p.longitude)
+                GeoPoint(place.latitude, place.longitude)
             )
             mapView.controller.setZoom(15.0)
             mapView.invalidate()
@@ -253,6 +256,7 @@ private fun RoutivaScreen(mapView: MapView) {
         locationOverlay.enableMyLocation()
 
         val location = locationOverlay.myLocation
+
         if (location != null) {
             mapView.controller.animateTo(location)
             mapView.controller.setZoom(16.0)
@@ -286,7 +290,6 @@ private fun RoutivaScreen(mapView: MapView) {
             }
         }
 
-    // Request location permission once when the screen opens.
     LaunchedEffect(Unit) {
         if (!locationPermissionGranted) {
             locationPermissionLauncher.launch(
@@ -306,15 +309,19 @@ private fun RoutivaScreen(mapView: MapView) {
 
         if (search.length >= 3) {
             delay(450)
+
             val results = withContext(Dispatchers.IO) {
-                runCatching { searchAddresses(search) }
-                    .getOrDefault(emptyList())
+                runCatching {
+                    searchAddresses(search)
+                }.getOrDefault(emptyList())
             }
-            if (query.trim() == search) suggestions = results
+
+            if (query.trim() == search) {
+                suggestions = results
+            }
         }
     }
 
-    // Redraw overlays without moving or zooming the map.
     LaunchedEffect(
         places.toList(),
         delivered.toList(),
@@ -350,8 +357,12 @@ private fun RoutivaScreen(mapView: MapView) {
                     delivered.getOrNull(index) == true,
                     routeStarted && index == activeIndex
                 )
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                setAnchor(
+                    Marker.ANCHOR_CENTER,
+                    Marker.ANCHOR_CENTER
+                )
             }
+
             mapView.overlays.add(marker)
         }
 
@@ -360,7 +371,6 @@ private fun RoutivaScreen(mapView: MapView) {
             mapView.overlays.add(locationOverlay)
         }
 
-        // Do not recenter the map during overlay updates.
         mapView.invalidate()
     }
 
@@ -374,13 +384,17 @@ private fun RoutivaScreen(mapView: MapView) {
 
         val result = withContext(Dispatchers.IO) {
             runCatching {
-                if (optimizeAutomatically) optimizeRoute(oldPlaces)
-                else getRouteInCurrentOrder(oldPlaces)
+                if (optimizeAutomatically) {
+                    optimizeRoute(oldPlaces)
+                } else {
+                    getRouteInCurrentOrder(oldPlaces)
+                }
             }
         }
 
         result.onSuccess { route ->
-            fun key(p: Place) = "${p.latitude},${p.longitude}"
+            fun key(place: Place) =
+                "${place.latitude},${place.longitude}"
 
             val statusMap = oldPlaces.indices.associate {
                 key(oldPlaces[it]) to oldDelivered[it]
@@ -396,29 +410,31 @@ private fun RoutivaScreen(mapView: MapView) {
             places.addAll(route.places)
 
             delivered.clear()
-            delivered.addAll(route.places.map {
-                statusMap[key(it)] ?: false
-            })
+            delivered.addAll(
+                route.places.map { statusMap[key(it)] ?: false }
+            )
 
             serviceMinutes.clear()
-            serviceMinutes.addAll(route.places.map {
-                minutesMap[key(it)] ?: DEFAULT_SERVICE_MINUTES
-            })
+            serviceMinutes.addAll(
+                route.places.map {
+                    minutesMap[key(it)] ?: DEFAULT_SERVICE_MINUTES
+                }
+            )
 
             deliveryTimes.clear()
-            deliveryTimes.addAll(route.places.map {
-                timesMap[key(it)] ?: "09:00"
-            })
+            deliveryTimes.addAll(
+                route.places.map { timesMap[key(it)] ?: "09:00" }
+            )
 
             routePoints = route.points
-            drivingMinutes = (route.drivingSeconds / 60.0).roundToInt()
+            drivingMinutes =
+                (route.drivingSeconds / 60.0).roundToInt()
             distanceKm = route.distanceMeters / 1000.0
             routeReady = true
             routeStarted = false
             activeIndex = delivered.indexOfFirst { !it }
                 .let { if (it < 0) 0 else it }
 
-            // Only when a new route is created, fit the route once.
             fitRouteOnMap()
 
             message = if (optimizeAutomatically) {
@@ -437,7 +453,9 @@ private fun RoutivaScreen(mapView: MapView) {
         AlertDialog(
             onDismissRequest = { showSettings = false },
             containerColor = CardBg,
-            title = { Text("General settings", color = Color.White) },
+            title = {
+                Text("General settings", color = Color.White)
+            },
             text = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -454,6 +472,7 @@ private fun RoutivaScreen(mapView: MapView) {
                             fontSize = 12.sp
                         )
                     }
+
                     Switch(
                         checked = optimizeAutomatically,
                         onCheckedChange = {
@@ -525,7 +544,9 @@ private fun RoutivaScreen(mapView: MapView) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 6.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBg),
+            colors = CardDefaults.cardColors(
+                containerColor = CardBg
+            ),
             shape = RoundedCornerShape(13.dp)
         ) {
             Row(
@@ -562,7 +583,9 @@ private fun RoutivaScreen(mapView: MapView) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 3.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = CardBg
+                )
             ) {
                 Column {
                     suggestions.take(5).forEach { place ->
@@ -575,7 +598,11 @@ private fun RoutivaScreen(mapView: MapView) {
                                 horizontalAlignment = Alignment.Start
                             ) {
                                 Text(place.name, color = Color.White)
-                                Text("Tap to add", color = Accent, fontSize = 10.sp)
+                                Text(
+                                    "Tap to add",
+                                    color = Accent,
+                                    fontSize = 10.sp
+                                )
                             }
                         }
                     }
@@ -654,7 +681,10 @@ private fun RoutivaScreen(mapView: MapView) {
                             contentColor = Bg
                         )
                     ) {
-                        Text("▶ Start route", fontWeight = FontWeight.Bold)
+                        Text(
+                            "▶ Start route",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 } else {
                     Button(
@@ -734,17 +764,18 @@ private fun RoutivaScreen(mapView: MapView) {
             }
         }
 
+        // MAP HEIGHT FIXED AT 220 DP
         AndroidView(
             factory = { mapView },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(145.dp)
+                .height(220.dp)
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 5.dp, bottom = 4.dp),
+                .padding(top = 3.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -767,7 +798,9 @@ private fun RoutivaScreen(mapView: MapView) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 5.dp),
-                colors = CardDefaults.cardColors(containerColor = DeliveredBg)
+                colors = CardDefaults.cardColors(
+                    containerColor = DeliveredBg
+                )
             ) {
                 Column(Modifier.padding(8.dp)) {
                     Text(
@@ -776,7 +809,11 @@ private fun RoutivaScreen(mapView: MapView) {
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
                     )
-                    Text(places[activeIndex].name, color = Color.White, fontSize = 12.sp)
+                    Text(
+                        places[activeIndex].name,
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
 
                     val nextIndex = (activeIndex + 1 until places.size)
                         .firstOrNull { !delivered[it] }
@@ -846,7 +883,11 @@ private fun RoutivaScreen(mapView: MapView) {
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("${index + 1}", color = Bg, fontWeight = FontWeight.Black)
+                                    Text(
+                                        "${index + 1}",
+                                        color = Bg,
+                                        fontWeight = FontWeight.Black
+                                    )
                                 }
 
                                 Spacer(Modifier.width(8.dp))
@@ -874,7 +915,11 @@ private fun RoutivaScreen(mapView: MapView) {
                                     onClick = { removePlace(index) },
                                     contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Text("Remove", color = Muted, fontSize = 10.sp)
+                                    Text(
+                                        "Remove",
+                                        color = Muted,
+                                        fontSize = 10.sp
+                                    )
                                 }
                             }
 
@@ -882,7 +927,11 @@ private fun RoutivaScreen(mapView: MapView) {
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("DELIVERY TIME", color = Muted, fontSize = 9.sp)
+                                    Text(
+                                        "DELIVERY TIME",
+                                        color = Muted,
+                                        fontSize = 9.sp
+                                    )
                                     Text(
                                         time,
                                         color = Accent,
@@ -901,7 +950,10 @@ private fun RoutivaScreen(mapView: MapView) {
                                             context,
                                             { _, h, m ->
                                                 deliveryTimes[index] = String.format(
-                                                    Locale.US, "%02d:%02d", h, m
+                                                    Locale.US,
+                                                    "%02d:%02d",
+                                                    h,
+                                                    m
                                                 )
                                             },
                                             hour,
@@ -910,7 +962,11 @@ private fun RoutivaScreen(mapView: MapView) {
                                         ).show()
                                     }
                                 ) {
-                                    Text("Set time", color = Accent, fontSize = 11.sp)
+                                    Text(
+                                        "Set time",
+                                        color = Accent,
+                                        fontSize = 11.sp
+                                    )
                                 }
                             }
 
@@ -918,7 +974,11 @@ private fun RoutivaScreen(mapView: MapView) {
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("TIME AT CUSTOMER", color = Muted, fontSize = 9.sp)
+                                    Text(
+                                        "TIME AT CUSTOMER",
+                                        color = Muted,
+                                        fontSize = 9.sp
+                                    )
                                     Text(
                                         "$service min",
                                         color = Accent,
@@ -979,8 +1039,16 @@ private fun RoutivaScreen(mapView: MapView) {
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDelivered) Color(0xFF35434A) else Accent,
-                                    contentColor = if (isDelivered) Color.White else Bg
+                                    containerColor = if (isDelivered) {
+                                        Color(0xFF35434A)
+                                    } else {
+                                        Accent
+                                    },
+                                    contentColor = if (isDelivered) {
+                                        Color.White
+                                    } else {
+                                        Bg
+                                    }
                                 ),
                                 shape = RoundedCornerShape(9.dp)
                             ) {
@@ -1000,8 +1068,18 @@ private fun RoutivaScreen(mapView: MapView) {
 @Composable
 private fun Summary(label: String, value: String) {
     Column {
-        Text(label, color = Muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-        Text(value, color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            color = Muted,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            value,
+            color = Accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -1013,7 +1091,11 @@ private fun numberedMarker(
 ): BitmapDrawable {
     val density = mapView.resources.displayMetrics.density
     val size = (46 * density).toInt().coerceAtLeast(46)
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(
+        size,
+        size,
+        Bitmap.Config.ARGB_8888
+    )
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
@@ -1034,6 +1116,7 @@ private fun numberedMarker(
     paint.textAlign = Paint.Align.CENTER
     paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     paint.textSize = if (number >= 10) size * 0.35f else size * 0.42f
+
     val baseline = size / 2f - (paint.ascent() + paint.descent()) / 2f
     canvas.drawText(number.toString(), size / 2f, baseline, paint)
 
@@ -1067,14 +1150,19 @@ private suspend fun searchAddresses(query: String): List<Place> {
             props.optString("city").takeIf { it.isNotBlank() }
         ).distinct().joinToString(" ")
 
-        if (name.isNotBlank()) results.add(Place(name, lat, lon))
+        if (name.isNotBlank()) {
+            results.add(Place(name, lat, lon))
+        }
     }
 
-    return results.distinctBy { "${it.latitude},${it.longitude}" }
+    return results.distinctBy {
+        "${it.latitude},${it.longitude}"
+    }
 }
 
 private suspend fun optimizeRoute(input: List<Place>): RouteResult {
     require(input.size >= 2)
+
     val coordinates = input.joinToString(";") {
         "${it.longitude},${it.latitude}"
     }
@@ -1103,20 +1191,25 @@ private suspend fun optimizeRoute(input: List<Place>): RouteResult {
 
         while (remaining.isNotEmpty()) {
             val current = order.last()
-            val next = remaining.minByOrNull { durations[current][it] } ?: break
+            val next = remaining.minByOrNull {
+                durations[current][it]
+            } ?: break
             order.add(next)
             remaining.remove(next)
         }
 
         var improved = true
+
         while (improved) {
             improved = false
+
             for (i in 1 until order.size - 1) {
                 for (j in i + 1 until order.size) {
                     val candidate = order.toMutableList()
                     candidate.subList(i, j + 1).reverse()
 
-                    if (openRouteCost(candidate, durations) <
+                    if (
+                        openRouteCost(candidate, durations) <
                         openRouteCost(order, durations)
                     ) {
                         order.clear()
@@ -1128,6 +1221,7 @@ private suspend fun optimizeRoute(input: List<Place>): RouteResult {
         }
 
         val cost = openRouteCost(order, durations)
+
         if (cost < bestCost) {
             bestCost = cost
             bestOrder = order
@@ -1137,7 +1231,9 @@ private suspend fun optimizeRoute(input: List<Place>): RouteResult {
     return fetchRoute(bestOrder.map { input[it] })
 }
 
-private suspend fun getRouteInCurrentOrder(input: List<Place>): RouteResult {
+private suspend fun getRouteInCurrentOrder(
+    input: List<Place>
+): RouteResult {
     require(input.size >= 2)
     return fetchRoute(input)
 }
@@ -1151,16 +1247,28 @@ private suspend fun fetchRoute(input: List<Place>): RouteResult {
         "https://router.project-osrm.org/route/v1/driving/" +
             "$coordinates?overview=full&geometries=geojson"
     )
-    val routes = json.optJSONArray("routes") ?: error("No route returned.")
-    val route = routes.optJSONObject(0) ?: error("Empty route response.")
-    val geometry = route.optJSONObject("geometry") ?: error("Missing geometry.")
-    val array = geometry.optJSONArray("coordinates") ?: error("Missing coordinates.")
+
+    val routes = json.optJSONArray("routes")
+        ?: error("No route returned.")
+    val route = routes.optJSONObject(0)
+        ?: error("Empty route response.")
+    val geometry = route.optJSONObject("geometry")
+        ?: error("Missing geometry.")
+    val array = geometry.optJSONArray("coordinates")
+        ?: error("Missing coordinates.")
 
     val points = mutableListOf<GeoPoint>()
+
     for (i in 0 until array.length()) {
         val coord = array.optJSONArray(i) ?: continue
+
         if (coord.length() >= 2) {
-            points.add(GeoPoint(coord.optDouble(1), coord.optDouble(0)))
+            points.add(
+                GeoPoint(
+                    coord.optDouble(1),
+                    coord.optDouble(0)
+                )
+            )
         }
     }
 
@@ -1177,30 +1285,48 @@ private fun openRouteCost(
     durations: Array<DoubleArray>
 ): Double {
     var cost = 0.0
+
     for (i in 0 until order.size - 1) {
         cost += durations[order[i]][order[i + 1]]
     }
+
     return cost
 }
 
 private suspend fun requestJson(urlString: String): JSONObject =
     withContext(Dispatchers.IO) {
-        val connection = URL(urlString).openConnection() as HttpURLConnection
+        val connection =
+            URL(urlString).openConnection() as HttpURLConnection
+
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
-            connection.setRequestProperty("User-Agent", "RoutivaAndroid/1.0")
-            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty(
+                "User-Agent",
+                "RoutivaAndroid/1.0"
+            )
+            connection.setRequestProperty(
+                "Accept",
+                "application/json"
+            )
 
             val code = connection.responseCode
+
             val stream = if (code in 200..299) {
                 connection.inputStream
             } else {
                 connection.errorStream
             }
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) error("HTTP $code: $body")
+
+            val body = stream?.bufferedReader()?.use {
+                it.readText()
+            }.orEmpty()
+
+            if (code !in 200..299) {
+                error("HTTP $code: $body")
+            }
+
             JSONObject(body)
         } finally {
             connection.disconnect()
