@@ -1,6 +1,11 @@
 
 package com.routiva.app
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,10 +55,12 @@ data class RouteResult(
 )
 
 class MainActivity : ComponentActivity() {
+
     private lateinit var mapView: MapView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         Configuration.getInstance().userAgentValue = packageName
 
         mapView = MapView(this).apply {
@@ -100,7 +107,9 @@ class MainActivity : ComponentActivity() {
         var query by remember { mutableStateOf("") }
         var suggestions by remember { mutableStateOf(listOf<Place>()) }
         var selectedPlace by remember { mutableStateOf<Place?>(null) }
-        var message by remember { mutableStateOf("Add addresses to plan your route") }
+        var message by remember {
+            mutableStateOf("Add addresses to plan your route")
+        }
         var busy by remember { mutableStateOf(false) }
         var routePoints by remember { mutableStateOf(listOf<GeoPoint>()) }
 
@@ -113,8 +122,10 @@ class MainActivity : ComponentActivity() {
 
             if (query.trim().length >= 3) {
                 delay(450)
+
                 try {
                     suggestions = searchPlaces(query.trim())
+
                     if (suggestions.isEmpty()) {
                         message = "No addresses found"
                     }
@@ -127,26 +138,44 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(places.toList(), completed.toList(), routePoints) {
             mapView.overlays.clear()
 
+            // Draw the road route.
             if (routePoints.size >= 2) {
                 mapView.overlays.add(
                     Polyline().apply {
                         setPoints(routePoints)
-                        title = "Routiva route"
+                        title = "Routiva delivery route"
                         width = 10f
-                        outlinePaint.color = android.graphics.Color.rgb(83, 139, 35)
+                        outlinePaint.color =
+                            android.graphics.Color.rgb(83, 139, 35)
                     }
                 )
             }
 
+            // Numbered markers match the delivery list.
             places.forEachIndexed { index, place ->
                 mapView.overlays.add(
                     Marker(mapView).apply {
-                        position = GeoPoint(place.latitude, place.longitude)
+                        position = GeoPoint(
+                            place.latitude,
+                            place.longitude
+                        )
+
+                        icon = createNumberedMarker(
+                            number = index + 1,
+                            delivered = completed.getOrNull(index) == true
+                        )
+
+                        setAnchor(
+                            Marker.ANCHOR_CENTER,
+                            Marker.ANCHOR_CENTER
+                        )
+
                         title = "${index + 1}. ${place.name}"
+
                         snippet = if (completed.getOrNull(index) == true) {
                             "Delivered"
                         } else {
-                            "Delivery stop"
+                            "Delivery stop ${index + 1}"
                         }
                     }
                 )
@@ -155,7 +184,9 @@ class MainActivity : ComponentActivity() {
             val points = if (routePoints.isNotEmpty()) {
                 routePoints
             } else {
-                places.map { GeoPoint(it.latitude, it.longitude) }
+                places.map {
+                    GeoPoint(it.latitude, it.longitude)
+                }
             }
 
             if (points.isNotEmpty()) {
@@ -183,6 +214,7 @@ class MainActivity : ComponentActivity() {
                 .background(RoutivaBg)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -191,7 +223,10 @@ class MainActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .size(50.dp)
-                        .background(RoutivaAccent, RoundedCornerShape(15.dp)),
+                        .background(
+                            RoutivaAccent,
+                            RoundedCornerShape(15.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -207,6 +242,7 @@ class MainActivity : ComponentActivity() {
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White
                     )
+
                     Text(
                         "SMART DELIVERY PLANNER",
                         style = MaterialTheme.typography.labelSmall,
@@ -232,6 +268,7 @@ class MainActivity : ComponentActivity() {
 
             Spacer(Modifier.height(16.dp))
 
+            // Delivery overview
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -252,7 +289,9 @@ class MainActivity : ComponentActivity() {
                             color = RoutivaMuted,
                             style = MaterialTheme.typography.labelSmall
                         )
+
                         Spacer(Modifier.height(5.dp))
+
                         Text(
                             "${places.size} stops",
                             color = Color.White,
@@ -266,7 +305,9 @@ class MainActivity : ComponentActivity() {
                             color = RoutivaMuted,
                             style = MaterialTheme.typography.labelSmall
                         )
+
                         Spacer(Modifier.height(5.dp))
+
                         Text(
                             "${completed.count { it }} / ${places.size}",
                             color = RoutivaAccent,
@@ -278,6 +319,7 @@ class MainActivity : ComponentActivity() {
 
             Spacer(Modifier.height(14.dp))
 
+            // Address search
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -329,14 +371,18 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     val place = selectedPlace
+
                     when {
-                        place == null ->
+                        place == null -> {
                             message = "Choose an address from suggestions"
+                        }
 
                         places.any {
                             it.latitude == place.latitude &&
                                 it.longitude == place.longitude
-                        } -> message = "Address already added"
+                        } -> {
+                            message = "Address already added"
+                        }
 
                         else -> {
                             places.add(place)
@@ -386,7 +432,10 @@ class MainActivity : ComponentActivity() {
                         contentColor = RoutivaAccent
                     )
                 ) {
-                    Text(if (busy) "Please wait..." else "Optimize route")
+                    Text(
+                        if (busy) "Please wait..."
+                        else "Optimize route"
+                    )
                 }
 
                 OutlinedButton(
@@ -410,12 +459,15 @@ class MainActivity : ComponentActivity() {
                 if (busy) {
                     try {
                         val result = createRoute(places.toList())
+
                         places.clear()
                         places.addAll(result.orderedPlaces)
+
                         completed.clear()
                         completed.addAll(
                             result.orderedPlaces.map { false }
                         )
+
                         routePoints = result.points
                         message = result.message
                     } catch (e: Exception) {
@@ -459,6 +511,7 @@ class MainActivity : ComponentActivity() {
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White
                 )
+
                 Text(
                     "${places.size} TOTAL",
                     style = MaterialTheme.typography.labelMedium,
@@ -496,18 +549,24 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .size(36.dp)
                                         .background(
-                                            if (completed.getOrNull(index) == true)
+                                            if (completed.getOrNull(index) == true) {
                                                 RoutivaAccent
-                                            else Color(0xFF34434D),
+                                            } else {
+                                                Color(0xFF34434D)
+                                            },
                                             RoundedCornerShape(11.dp)
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         "${index + 1}",
-                                        color = if (completed.getOrNull(index) == true)
+                                        color = if (
+                                            completed.getOrNull(index) == true
+                                        ) {
                                             Color(0xFF17251B)
-                                        else Color.White,
+                                        } else {
+                                            Color.White
+                                        },
                                         style = MaterialTheme.typography.titleSmall
                                     )
                                 }
@@ -518,14 +577,22 @@ class MainActivity : ComponentActivity() {
                                         color = Color.White,
                                         style = MaterialTheme.typography.titleSmall
                                     )
+
                                     Spacer(Modifier.height(4.dp))
+
                                     Text(
-                                        if (completed.getOrNull(index) == true)
+                                        if (completed.getOrNull(index) == true) {
                                             "DELIVERED"
-                                        else "Estimated stop · 10 min",
-                                        color = if (completed.getOrNull(index) == true)
+                                        } else {
+                                            "Estimated stop · 10 min"
+                                        },
+                                        color = if (
+                                            completed.getOrNull(index) == true
+                                        ) {
                                             RoutivaAccent
-                                        else RoutivaMuted,
+                                        } else {
+                                            RoutivaMuted
+                                        },
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -533,10 +600,13 @@ class MainActivity : ComponentActivity() {
 
                             Spacer(Modifier.height(8.dp))
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Button(
                                     onClick = {
                                         completed[index] = true
+
                                         message = if (completed.all { it }) {
                                             "All deliveries completed"
                                         } else {
@@ -584,6 +654,7 @@ class MainActivity : ComponentActivity() {
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White
                 )
+
                 Text(
                     "OPENSTREETMAP",
                     style = MaterialTheme.typography.labelSmall,
@@ -602,65 +673,146 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun searchPlaces(text: String): List<Place> =
-        withContext(Dispatchers.IO) {
-            val encoded = URLEncoder.encode(text, "UTF-8")
-            val url = URL(
-                "https://photon.komoot.io/api/" +
-                    "?q=$encoded&limit=6&lat=52.52&lon=13.405"
-            )
-            val json = requestJson(url, 12000)
-            val features = json.getJSONArray("features")
-            val results = mutableListOf<Place>()
+    // Creates a green numbered map marker.
+    private fun createNumberedMarker(
+        number: Int,
+        delivered: Boolean
+    ): BitmapDrawable {
+        val size = (48 * resources.displayMetrics.density).toInt()
 
-            for (i in 0 until features.length()) {
-                val feature = features.getJSONObject(i)
-                val coords = feature.getJSONObject("geometry")
-                    .getJSONArray("coordinates")
-                val props = feature.getJSONObject("properties")
+        val bitmap = Bitmap.createBitmap(
+            size,
+            size,
+            Bitmap.Config.ARGB_8888
+        )
 
-                val name = listOf(
-                    props.optString("name"),
-                    props.optString("housenumber"),
-                    props.optString("street"),
-                    props.optString("postcode"),
-                    props.optString("city")
-                )
-                    .filter { it.isNotBlank() && it != "null" }
-                    .distinct()
-                    .joinToString(" ")
+        val canvas = Canvas(bitmap)
+        val center = size / 2f
 
-                if (name.isNotBlank()) {
-                    results.add(
-                        Place(
-                            name = name,
-                            longitude = coords.getDouble(0),
-                            latitude = coords.getDouble(1)
-                        )
-                    )
-                }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (delivered) {
+                android.graphics.Color.rgb(120, 180, 80)
+            } else {
+                android.graphics.Color.rgb(199, 243, 107)
             }
-            results
+            style = Paint.Style.FILL
         }
+
+        // Circle background.
+        canvas.drawCircle(
+            center,
+            center,
+            size * 0.43f,
+            paint
+        )
+
+        // Dark outline.
+        paint.color = android.graphics.Color.rgb(16, 24, 32)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = size * 0.07f
+
+        canvas.drawCircle(
+            center,
+            center,
+            size * 0.43f,
+            paint
+        )
+
+        // Number.
+        paint.style = Paint.Style.FILL
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = Typeface.create(
+            Typeface.DEFAULT,
+            Typeface.BOLD
+        )
+        paint.textSize = size * 0.42f
+
+        val baseline = center -
+            (paint.ascent() + paint.descent()) / 2f
+
+        canvas.drawText(
+            number.toString(),
+            center,
+            baseline,
+            paint
+        )
+
+        return BitmapDrawable(resources, bitmap)
+    }
+
+    private suspend fun searchPlaces(
+        text: String
+    ): List<Place> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(text, "UTF-8")
+
+        val url = URL(
+            "https://photon.komoot.io/api/" +
+                "?q=$encoded&limit=6&lat=52.52&lon=13.405"
+        )
+
+        val json = requestJson(url, 12000)
+        val features = json.getJSONArray("features")
+        val results = mutableListOf<Place>()
+
+        for (i in 0 until features.length()) {
+            val feature = features.getJSONObject(i)
+
+            val coords = feature
+                .getJSONObject("geometry")
+                .getJSONArray("coordinates")
+
+            val props = feature.getJSONObject("properties")
+
+            val name = listOf(
+                props.optString("name"),
+                props.optString("housenumber"),
+                props.optString("street"),
+                props.optString("postcode"),
+                props.optString("city")
+            )
+                .filter { it.isNotBlank() && it != "null" }
+                .distinct()
+                .joinToString(" ")
+
+            if (name.isNotBlank()) {
+                results.add(
+                    Place(
+                        name = name,
+                        longitude = coords.getDouble(0),
+                        latitude = coords.getDouble(1)
+                    )
+                )
+            }
+        }
+
+        results
+    }
 
     private suspend fun createRoute(
         input: List<Place>
     ): RouteResult = withContext(Dispatchers.IO) {
-        require(input.size >= 2) { "Add at least 2 addresses" }
+        require(input.size >= 2) {
+            "Add at least 2 addresses"
+        }
 
         val coordinates = input.joinToString(";") {
             "${it.longitude},${it.latitude}"
         }
 
+        // Get driving durations between every pair of stops.
         val tableUrl = URL(
             "https://router.project-osrm.org/table/v1/driving/" +
                 "$coordinates?annotations=duration"
         )
+
         val tableJson = requestJson(tableUrl, 25000)
 
         if (tableJson.optString("code") != "Ok") {
             throw IllegalStateException(
-                tableJson.optString("message", "Driving-time matrix failed")
+                tableJson.optString(
+                    "message",
+                    "Driving-time matrix failed"
+                )
             )
         }
 
@@ -670,25 +822,35 @@ class MainActivity : ComponentActivity() {
         val durations = Array(n) { i ->
             DoubleArray(n) { j ->
                 val row = durationArray.getJSONArray(i)
-                if (row.isNull(j)) Double.POSITIVE_INFINITY
-                else row.getDouble(j)
+
+                if (row.isNull(j)) {
+                    Double.POSITIVE_INFINITY
+                } else {
+                    row.getDouble(j)
+                }
             }
         }
 
         var bestOrder: List<Int>? = null
         var bestCost = Double.POSITIVE_INFINITY
 
+        // Try every stop as the starting point.
         for (start in 0 until n) {
             val remaining = (0 until n).toMutableSet()
             val order = mutableListOf(start)
+
             remaining.remove(start)
             var current = start
 
+            // Nearest-neighbour route construction.
             while (remaining.isNotEmpty()) {
                 val next = remaining
-                    .filter { durations[current][it].isFinite() }
-                    .minByOrNull { durations[current][it] }
-                    ?: break
+                    .filter {
+                        durations[current][it].isFinite()
+                    }
+                    .minByOrNull {
+                        durations[current][it]
+                    } ?: break
 
                 order.add(next)
                 remaining.remove(next)
@@ -697,14 +859,19 @@ class MainActivity : ComponentActivity() {
 
             if (order.size != n) continue
 
+            // Improve the open route using 2-opt reversals.
             var improved = true
+
             while (improved) {
                 improved = false
+
                 for (i in 0 until order.size - 1) {
                     for (j in i + 1 until order.size) {
                         val candidate = order.toMutableList()
                         candidate.subList(i, j + 1).reverse()
-                        if (routeCost(candidate, durations) + 0.001 <
+
+                        if (
+                            routeCost(candidate, durations) + 0.001 <
                             routeCost(order, durations)
                         ) {
                             order.clear()
@@ -716,6 +883,7 @@ class MainActivity : ComponentActivity() {
             }
 
             val cost = routeCost(order, durations)
+
             if (cost < bestCost) {
                 bestCost = cost
                 bestOrder = order.toList()
@@ -723,17 +891,22 @@ class MainActivity : ComponentActivity() {
         }
 
         val order = bestOrder
-            ?: throw IllegalStateException("Some addresses are not connected by road")
+            ?: throw IllegalStateException(
+                "Some addresses are not connected by road"
+            )
 
         val orderedPlaces = order.map { input[it] }
+
         val orderedCoordinates = orderedPlaces.joinToString(";") {
             "${it.longitude},${it.latitude}"
         }
 
+        // Get the actual road geometry in optimized order.
         val routeUrl = URL(
             "https://router.project-osrm.org/route/v1/driving/" +
                 "$orderedCoordinates?overview=full&geometries=geojson"
         )
+
         val routeJson = requestJson(routeUrl, 25000)
 
         if (routeJson.optString("code") != "Ok") {
@@ -755,7 +928,11 @@ class MainActivity : ComponentActivity() {
 
         val points = (0 until geometry.length()).map { i ->
             val point = geometry.getJSONArray(i)
-            GeoPoint(point.getDouble(1), point.getDouble(0))
+
+            GeoPoint(
+                point.getDouble(1),
+                point.getDouble(0)
+            )
         }
 
         if (points.size < 2) {
@@ -774,11 +951,17 @@ class MainActivity : ComponentActivity() {
         durations: Array<DoubleArray>
     ): Double {
         var total = 0.0
+
         for (i in 0 until order.size - 1) {
             val duration = durations[order[i]][order[i + 1]]
-            if (!duration.isFinite()) return Double.POSITIVE_INFINITY
+
+            if (!duration.isFinite()) {
+                return Double.POSITIVE_INFINITY
+            }
+
             total += duration
         }
+
         return total
     }
 
@@ -787,24 +970,38 @@ class MainActivity : ComponentActivity() {
         timeout: Int
     ): JSONObject {
         val connection = url.openConnection() as HttpURLConnection
+
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = timeout
             connection.readTimeout = timeout
-            connection.setRequestProperty("User-Agent", "RoutivaAndroid/1.0")
-            connection.setRequestProperty("Accept", "application/json")
+
+            connection.setRequestProperty(
+                "User-Agent",
+                "RoutivaAndroid/1.0"
+            )
+
+            connection.setRequestProperty(
+                "Accept",
+                "application/json"
+            )
 
             val status = connection.responseCode
+
             val stream = if (status in 200..299) {
                 connection.inputStream
             } else {
                 connection.errorStream
             }
 
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val body = stream?.bufferedReader()?.use {
+                it.readText()
+            }.orEmpty()
 
             if (status !in 200..299) {
-                throw IllegalStateException("HTTP $status: ${body.take(120)}")
+                throw IllegalStateException(
+                    "HTTP $status: ${body.take(120)}"
+                )
             }
 
             return JSONObject(body)
