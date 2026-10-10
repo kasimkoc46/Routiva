@@ -4,12 +4,16 @@ package com.routiva.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +31,12 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+private val RoutivaBg = Color(0xFF101820)
+private val RoutivaCard = Color(0xFF202B35)
+private val RoutivaAccent = Color(0xFFC7F36B)
+private val RoutivaMuted = Color(0xFFB3C0CB)
+private val RoutivaGreen = Color(0xFF27352B)
+
 data class Place(
     val name: String,
     val latitude: Double,
@@ -40,7 +50,6 @@ data class RouteResult(
 )
 
 class MainActivity : ComponentActivity() {
-
     private lateinit var mapView: MapView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,8 +64,23 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
-                RoutivaScreen()
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = RoutivaAccent,
+                    onPrimary = Color(0xFF17251B),
+                    secondary = Color(0xFF9DBB66),
+                    background = RoutivaBg,
+                    surface = RoutivaCard,
+                    onSurface = Color.White,
+                    onBackground = Color.White
+                )
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = RoutivaBg
+                ) {
+                    RoutivaScreen()
+                }
             }
         }
     }
@@ -76,7 +100,7 @@ class MainActivity : ComponentActivity() {
         var query by remember { mutableStateOf("") }
         var suggestions by remember { mutableStateOf(listOf<Place>()) }
         var selectedPlace by remember { mutableStateOf<Place?>(null) }
-        var message by remember { mutableStateOf("Enter a delivery address") }
+        var message by remember { mutableStateOf("Add addresses to plan your route") }
         var busy by remember { mutableStateOf(false) }
         var routePoints by remember { mutableStateOf(listOf<GeoPoint>()) }
 
@@ -107,8 +131,9 @@ class MainActivity : ComponentActivity() {
                 mapView.overlays.add(
                     Polyline().apply {
                         setPoints(routePoints)
-                        title = "Routiva optimized route"
-                        width = 9f
+                        title = "Routiva route"
+                        width = 10f
+                        outlinePaint.color = android.graphics.Color.rgb(83, 139, 35)
                     }
                 )
             }
@@ -155,29 +180,128 @@ class MainActivity : ComponentActivity() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .background(RoutivaBg)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Text(
-                "Routiva",
-                style = MaterialTheme.typography.headlineLarge
-            )
-            Text("Smart delivery route planning")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .background(RoutivaAccent, RoundedCornerShape(15.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "R",
+                        color = Color(0xFF17251B),
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                }
 
-            Spacer(Modifier.height(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Routiva",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White
+                    )
+                    Text(
+                        "SMART DELIVERY PLANNER",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RoutivaMuted
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = RoutivaGreen
+                ) {
+                    Text(
+                        "READY",
+                        modifier = Modifier.padding(
+                            horizontal = 12.dp,
+                            vertical = 8.dp
+                        ),
+                        color = RoutivaAccent,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = RoutivaCard
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "DELIVERY OVERVIEW",
+                            color = RoutivaMuted,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            "${places.size} stops",
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "COMPLETED",
+                            color = RoutivaMuted,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            "${completed.count { it }} / ${places.size}",
+                            color = RoutivaAccent,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
 
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Enter delivery address") },
+                label = { Text("Search delivery address") },
+                placeholder = { Text("Start typing an address...") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = RoutivaAccent,
+                    focusedLabelColor = RoutivaAccent,
+                    cursorColor = RoutivaAccent
+                )
             )
 
             if (suggestions.isNotEmpty()) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 180.dp)
+                        .heightIn(max = 150.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = RoutivaCard
+                    )
                 ) {
                     LazyColumn {
                         itemsIndexed(suggestions) { _, place ->
@@ -190,7 +314,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(place.name)
+                                Text(
+                                    place.name,
+                                    color = Color.White
+                                )
                             }
                         }
                     }
@@ -202,14 +329,13 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     val place = selectedPlace
-
                     when {
                         place == null ->
                             message = "Choose an address from suggestions"
 
                         places.any {
                             it.latitude == place.latitude &&
-                            it.longitude == place.longitude
+                                it.longitude == place.longitude
                         } -> message = "Address already added"
 
                         else -> {
@@ -219,13 +345,20 @@ class MainActivity : ComponentActivity() {
                             selectedPlace = null
                             suggestions = emptyList()
                             routePoints = emptyList()
-                            message = "Address added"
+                            message = "Address added successfully"
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RoutivaAccent,
+                    contentColor = Color(0xFF17251B)
+                )
             ) {
-                Text("Add address")
+                Text("＋  Add delivery address")
             }
 
             Spacer(Modifier.height(8.dp))
@@ -240,13 +373,20 @@ class MainActivity : ComponentActivity() {
                             message = "Add at least 2 addresses"
                         } else {
                             busy = true
-                            message = "Calculating driving times..."
+                            message = "Optimizing driving route..."
                         }
                     },
                     enabled = !busy,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF35472C),
+                        contentColor = RoutivaAccent
+                    )
                 ) {
-                    Text(if (busy) "Please wait..." else "Create route")
+                    Text(if (busy) "Please wait..." else "Optimize route")
                 }
 
                 OutlinedButton(
@@ -254,10 +394,13 @@ class MainActivity : ComponentActivity() {
                         places.clear()
                         completed.clear()
                         routePoints = emptyList()
-                        message = "Addresses cleared"
+                        message = "All addresses cleared"
                     },
                     enabled = !busy,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Text("Clear all")
                 }
@@ -267,35 +410,63 @@ class MainActivity : ComponentActivity() {
                 if (busy) {
                     try {
                         val result = createRoute(places.toList())
-
                         places.clear()
                         places.addAll(result.orderedPlaces)
-
                         completed.clear()
                         completed.addAll(
                             result.orderedPlaces.map { false }
                         )
-
                         routePoints = result.points
                         message = result.message
                     } catch (e: Exception) {
                         message = (
                             "Route error: " +
-                            (e.message ?: e.javaClass.simpleName)
-                        ).take(220)
+                                (e.message ?: e.javaClass.simpleName)
+                            ).take(220)
                     } finally {
                         busy = false
                     }
                 }
             }
 
-            Text(message, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
-            Text(
-                "Delivery addresses (${places.size})",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = RoutivaGreen
+            ) {
+                Text(
+                    message,
+                    modifier = Modifier.padding(
+                        horizontal = 12.dp,
+                        vertical = 10.dp
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFD8E7C4)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Delivery stops",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White
+                )
+                Text(
+                    "${places.size} TOTAL",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RoutivaAccent
+                )
+            }
+
+            Spacer(Modifier.height(5.dp))
 
             LazyColumn(
                 modifier = Modifier
@@ -303,62 +474,130 @@ class MainActivity : ComponentActivity() {
                     .fillMaxWidth()
             ) {
                 itemsIndexed(places) { index, place ->
-                    Column(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                    ) {
-                        Text("${index + 1}. ${place.name}")
-
-                        Text(
-                            if (completed.getOrNull(index) == true) {
-                                "Delivered"
-                            } else {
-                                "Estimated stop: 10 minutes"
-                            }
+                            .padding(vertical = 5.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = RoutivaCard
                         )
-
-                        Row {
-                            Button(
-                                onClick = {
-                                    completed[index] = true
-                                    message = if (completed.all { it }) {
-                                        "All deliveries completed"
-                                    } else {
-                                        "Delivered. Continue to next stop."
-                                    }
-                                },
-                                enabled = completed.getOrNull(index) == false
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text("Delivered")
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(
+                                            if (completed.getOrNull(index) == true)
+                                                RoutivaAccent
+                                            else Color(0xFF34434D),
+                                            RoundedCornerShape(11.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "${index + 1}",
+                                        color = if (completed.getOrNull(index) == true)
+                                            Color(0xFF17251B)
+                                        else Color.White,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        place.name,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        if (completed.getOrNull(index) == true)
+                                            "DELIVERED"
+                                        else "Estimated stop · 10 min",
+                                        color = if (completed.getOrNull(index) == true)
+                                            RoutivaAccent
+                                        else RoutivaMuted,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
 
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.height(8.dp))
 
-                            OutlinedButton(
-                                onClick = {
-                                    places.removeAt(index)
-                                    completed.removeAt(index)
-                                    routePoints = emptyList()
-                                    message = "Address removed"
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        completed[index] = true
+                                        message = if (completed.all { it }) {
+                                            "All deliveries completed"
+                                        } else {
+                                            "Delivery marked complete"
+                                        }
+                                    },
+                                    enabled = completed.getOrNull(index) == false,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = RoutivaAccent,
+                                        contentColor = Color(0xFF17251B)
+                                    )
+                                ) {
+                                    Text("Delivered")
                                 }
-                            ) {
-                                Text("Remove")
+
+                                OutlinedButton(
+                                    onClick = {
+                                        places.removeAt(index)
+                                        completed.removeAt(index)
+                                        routePoints = emptyList()
+                                        message = "Address removed"
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Remove")
+                                }
                             }
                         }
-
-                        HorizontalDivider()
                     }
                 }
             }
 
-            Text("Map • OpenStreetMap")
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Route map",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White
+                )
+                Text(
+                    "OPENSTREETMAP",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RoutivaAccent
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             AndroidView(
                 factory = { mapView },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(220.dp)
             )
         }
     }
@@ -368,17 +607,15 @@ class MainActivity : ComponentActivity() {
             val encoded = URLEncoder.encode(text, "UTF-8")
             val url = URL(
                 "https://photon.komoot.io/api/" +
-                "?q=$encoded&limit=6&lat=52.52&lon=13.405"
+                    "?q=$encoded&limit=6&lat=52.52&lon=13.405"
             )
-
             val json = requestJson(url, 12000)
             val features = json.getJSONArray("features")
             val results = mutableListOf<Place>()
 
             for (i in 0 until features.length()) {
                 val feature = features.getJSONObject(i)
-                val coords = feature
-                    .getJSONObject("geometry")
+                val coords = feature.getJSONObject("geometry")
                     .getJSONArray("coordinates")
                 val props = feature.getJSONObject("properties")
 
@@ -403,26 +640,22 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
-
             results
         }
 
     private suspend fun createRoute(
         input: List<Place>
     ): RouteResult = withContext(Dispatchers.IO) {
-
         require(input.size >= 2) { "Add at least 2 addresses" }
 
         val coordinates = input.joinToString(";") {
             "${it.longitude},${it.latitude}"
         }
 
-        // Get driving-time matrix for every pair of stops.
         val tableUrl = URL(
             "https://router.project-osrm.org/table/v1/driving/" +
-            "$coordinates?annotations=duration"
+                "$coordinates?annotations=duration"
         )
-
         val tableJson = requestJson(tableUrl, 25000)
 
         if (tableJson.optString("code") != "Ok") {
@@ -437,15 +670,11 @@ class MainActivity : ComponentActivity() {
         val durations = Array(n) { i ->
             DoubleArray(n) { j ->
                 val row = durationArray.getJSONArray(i)
-                if (row.isNull(j)) {
-                    Double.POSITIVE_INFINITY
-                } else {
-                    row.getDouble(j)
-                }
+                if (row.isNull(j)) Double.POSITIVE_INFINITY
+                else row.getDouble(j)
             }
         }
 
-        // Try every possible starting stop, using nearest-neighbour.
         var bestOrder: List<Int>? = null
         var bestCost = Double.POSITIVE_INFINITY
 
@@ -454,7 +683,6 @@ class MainActivity : ComponentActivity() {
             val order = mutableListOf(start)
             remaining.remove(start)
             var current = start
-            var cost = 0.0
 
             while (remaining.isNotEmpty()) {
                 val next = remaining
@@ -462,7 +690,6 @@ class MainActivity : ComponentActivity() {
                     .minByOrNull { durations[current][it] }
                     ?: break
 
-                cost += durations[current][next]
                 order.add(next)
                 remaining.remove(next)
                 current = next
@@ -470,19 +697,16 @@ class MainActivity : ComponentActivity() {
 
             if (order.size != n) continue
 
-            // Improve the open route using 2-opt reversals.
             var improved = true
             while (improved) {
                 improved = false
-
                 for (i in 0 until order.size - 1) {
                     for (j in i + 1 until order.size) {
                         val candidate = order.toMutableList()
                         candidate.subList(i, j + 1).reverse()
-
-                        val candidateCost = routeCost(candidate, durations)
-
-                        if (candidateCost + 0.001 < routeCost(order, durations)) {
+                        if (routeCost(candidate, durations) + 0.001 <
+                            routeCost(order, durations)
+                        ) {
                             order.clear()
                             order.addAll(candidate)
                             improved = true
@@ -491,8 +715,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            cost = routeCost(order, durations)
-
+            val cost = routeCost(order, durations)
             if (cost < bestCost) {
                 bestCost = cost
                 bestOrder = order.toList()
@@ -500,21 +723,17 @@ class MainActivity : ComponentActivity() {
         }
 
         val order = bestOrder
-            ?: throw IllegalStateException(
-                "Some addresses are not connected by road"
-            )
+            ?: throw IllegalStateException("Some addresses are not connected by road")
 
         val orderedPlaces = order.map { input[it] }
         val orderedCoordinates = orderedPlaces.joinToString(";") {
             "${it.longitude},${it.latitude}"
         }
 
-        // Draw the actual road route in optimized stop order.
         val routeUrl = URL(
             "https://router.project-osrm.org/route/v1/driving/" +
-            "$orderedCoordinates?overview=full&geometries=geojson"
+                "$orderedCoordinates?overview=full&geometries=geojson"
         )
-
         val routeJson = requestJson(routeUrl, 25000)
 
         if (routeJson.optString("code") != "Ok") {
@@ -555,13 +774,11 @@ class MainActivity : ComponentActivity() {
         durations: Array<DoubleArray>
     ): Double {
         var total = 0.0
-
         for (i in 0 until order.size - 1) {
             val duration = durations[order[i]][order[i + 1]]
             if (!duration.isFinite()) return Double.POSITIVE_INFINITY
             total += duration
         }
-
         return total
     }
 
@@ -570,15 +787,11 @@ class MainActivity : ComponentActivity() {
         timeout: Int
     ): JSONObject {
         val connection = url.openConnection() as HttpURLConnection
-
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = timeout
             connection.readTimeout = timeout
-            connection.setRequestProperty(
-                "User-Agent",
-                "RoutivaAndroid/1.0"
-            )
+            connection.setRequestProperty("User-Agent", "RoutivaAndroid/1.0")
             connection.setRequestProperty("Accept", "application/json")
 
             val status = connection.responseCode
@@ -588,14 +801,10 @@ class MainActivity : ComponentActivity() {
                 connection.errorStream
             }
 
-            val body = stream?.bufferedReader()?.use {
-                it.readText()
-            }.orEmpty()
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
 
             if (status !in 200..299) {
-                throw IllegalStateException(
-                    "HTTP $status: ${body.take(120)}"
-                )
+                throw IllegalStateException("HTTP $status: ${body.take(120)}")
             }
 
             return JSONObject(body)
